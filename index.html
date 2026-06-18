@@ -466,21 +466,18 @@ function calcHoldings() {
     const s = map[t.stock];
     if (s.name === '' && t.name) s.name = t.name;
     if (['B-S','B-M'].includes(t.bsr)) {
-      // 買進：股數直接加（正數），成本直接加
+      // 買進：Spend為負數（支出），股數正數
       s.share += t.share;
-      s.totalSpend += t.spend;
+      s.totalSpend += Math.abs(t.spend);
     } else if (t.bsr === 'S') {
-      // 賣出：Share欄位本身是負數，股數直接加即可變少
-      // 但Spend是賣出「收到」的金額（正數），不是成本，不能加到totalSpend
-      // 改用「移動平均成本法」：賣出時依目前均價按比例扣除成本
+      // 賣出：Share欄位本身為負數，Spend為正數（收入金額）
       const avgBefore = s.share > 0 ? s.totalSpend / s.share : 0;
-      const soldShare = Math.abs(t.share); // t.share是負數，取絕對值
+      const soldShare = Math.abs(t.share);
       s.totalSpend += t.share * avgBefore; // t.share為負數，等同扣除 soldShare*avgBefore 的成本
       s.share += t.share;
-      // 已實現損益 = 賣出收入 - 按均價計算的成本
       s.realPnl += t.spend - (soldShare * avgBefore);
     } else if (t.bsr === 'R') {
-      s.div += t.spend;
+      s.div += Math.abs(t.spend) - Math.abs(t.fee || 0);
     }
   });
   stocks = Object.values(map)
