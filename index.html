@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投資組合追蹤工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--bg2:#F1EFEA;--bg3:#E8E6E0;
+  --text:#1A1A18;--text2:#6B6A66;--text3:#9B9A96;
+  --border:#D8D6D0;--border2:#E8E6E0;
+  --green:#1A7A4A;--green-bg:#EAF5EE;
+  --red:#C0392B;--red-bg:#FDEDEC;
+  --blue:#1A5FA8;--blue-bg:#EAF0FA;
+  --radius:10px;--radius-sm:6px;
+  --shadow:0 1px 4px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
+button{border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-size:13px;font-family:inherit;border-radius:var(--radius-sm);transition:background .15s}
+button:hover{background:var(--bg2)}
+input,select,textarea{border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;border-radius:var(--radius-sm);padding:0 10px;height:34px;width:100%;outline:none;transition:border .15s}
+input:focus,select:focus{border-color:var(--blue)}
+.pos{color:var(--green)}.neg{color:var(--red)}
+
+/* ── Login ── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
+.login-box{background:#fff;border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;width:320px;box-shadow:var(--shadow);text-align:center}
+.login-box h1{font-size:20px;font-weight:600;margin-bottom:.35rem}
+.login-box p{color:var(--text2);font-size:13px;margin-bottom:1.75rem}
+.login-box input{margin-bottom:.75rem;text-align:center;letter-spacing:3px;font-size:18px}
+.login-box .err{color:var(--red);font-size:12px;margin-top:.5rem;min-height:18px}
+.login-box .btn-primary{width:100%;height:40px;background:var(--text);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;margin-top:.5rem}
+.login-box .btn-primary:hover{opacity:.88}
+.remember{display:flex;align-items:center;gap:6px;justify-content:center;margin-top:.75rem;font-size:12px;color:var(--text2)}
+.remember input{width:auto;height:auto;padding:0}
+
+/* ── App Layout ── */
+#app{display:none;min-height:100vh;padding:0 0 2rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-bottom:1px solid var(--border2);background:#fff;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:15px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.topbar .sync-btn{display:flex;align-items:center;gap:5px;height:32px;padding:0 12px;font-size:12px}
+.topbar .sync-status{font-size:11px;color:var(--text3)}
+.logout-btn{font-size:12px;height:32px;padding:0 10px;color:var(--text2)}
+main{max-width:1100px;margin:0 auto;padding:1.25rem 1rem}
+
+/* ── Setup Banner ── */
+.setup-banner{background:var(--blue-bg);border:1px solid #c0d4f0;border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:13px}
+.setup-banner h3{font-size:14px;font-weight:600;color:var(--blue);margin-bottom:.35rem}
+.setup-banner input{margin-top:.5rem;height:32px;font-size:12px;font-family:monospace}
+.setup-banner .save-url{height:32px;padding:0 14px;margin-top:.5rem;font-size:12px;background:var(--blue);color:#fff;border:none}
+
+/* ── Nav ── */
+.nav{display:flex;gap:2px;margin-bottom:1.25rem;border-bottom:1px solid var(--border2);padding-bottom:0}
+.nav button{background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:13px;color:var(--text2);margin-bottom:-1px;border-radius:0}
+.nav button:hover{background:var(--bg2);color:var(--text)}
+.nav button.active{color:var(--text);border-bottom-color:var(--text);font-weight:500}
+.panel{display:none}.panel.active{display:block}
+
+/* ── Metrics ── */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1.25rem}
+.mc{background:#fff;border:1px solid var(--border2);border-radius:var(--radius);padding:.85rem 1rem}
+.mc .lb{font-size:11px;color:var(--text2);margin-bottom:4px}
+.mc .vl{font-size:18px;font-weight:600}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;gap:6px;margin-bottom:.85rem;flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{width:auto;height:32px;font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 14px;font-size:12px;border-radius:var(--radius-sm)}
+.btn-primary{background:var(--text);color:#fff;border-color:var(--text)}
+.btn-primary:hover{opacity:.88;background:var(--text)}
+.btn-danger{color:var(--red);border-color:var(--red)}
+.btn-danger:hover{background:var(--red-bg)}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--border2);border-radius:var(--radius);background:#fff}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:var(--bg2);font-weight:500;font-size:11px;color:var(--text2);padding:8px 10px;text-align:right;border-bottom:1px solid var(--border2);white-space:nowrap;position:sticky;top:0}
+thead th:nth-child(-n+3){text-align:left}
+tbody tr{border-bottom:1px solid var(--border2)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg)}
+td{padding:8px 10px;text-align:right;white-space:nowrap}
+td:nth-child(-n+3){text-align:left}
+.tag{font-size:10px;padding:1px 6px;border-radius:99px;margin-left:4px;font-weight:500}
+.tag-e{background:var(--blue-bg);color:var(--blue)}
+.tag-s{background:var(--bg2);color:var(--text2)}
+.pager{display:flex;align-items:center;gap:6px;margin-top:.85rem;justify-content:flex-end;font-size:12px;color:var(--text2)}
+.pager button{height:28px;padding:0 10px}
+
+/* ── Cards ── */
+.card{background:#fff;border:1px solid var(--border2);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.card h3{font-size:14px;font-weight:600;margin-bottom:.85rem;display:flex;align-items:center;gap:6px}
+.ret-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-top:.85rem}
+.ret-card{background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);padding:.85rem 1rem;text-align:center}
+.ret-card .rt{font-size:11px;color:var(--text2);margin-bottom:5px}
+.ret-card .rv{font-size:22px;font-weight:700}
+.ret-card .rd{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:1.5rem;width:340px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:1rem}
+.modal label{font-size:11px;color:var(--text2);display:block;margin:10px 0 3px}
+.modal-btns{display:flex;gap:8px;margin-top:1.25rem;justify-content:flex-end}
+
+/* ── Price Log ── */
+.price-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border2);font-size:12px}
+.price-row:last-child{border-bottom:none}
+.price-row .sym{font-weight:600;min-width:65px}
+.price-row .nm{color:var(--text2);flex:1}
+.price-row .pr{min-width:55px;text-align:right}
+.badge{font-size:11px;padding:2px 8px;border-radius:99px}
+.badge-ok{background:var(--green-bg);color:var(--green)}
+.badge-err{background:var(--red-bg);color:var(--red)}
+.badge-ld{background:var(--bg2);color:var(--text2)}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .mc .vl{font-size:15px}
+  .ret-grid{grid-template-columns:repeat(2,1fr)}
+  .ret-card .rv{font-size:18px}
+  main{padding:.85rem .75rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════
+     登入畫面
+═════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>📈 投資組合工具</h1>
+    <p>請輸入密碼以繼續</p>
+    <input type="password" id="pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="err" id="pw-err"></div>
+    <button class="btn-primary" onclick="doLogin()">登入</button>
+    <div class="remember">
+      <input type="checkbox" id="remember" checked>
+      <label for="remember">記住登入（30天）</label>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     主應用
+═════════════════════════════════ -->
+<div id="app">
+  <div class="topbar">
+    <h1>📈 投資組合追蹤</h1>
+    <div class="topbar-right">
+      <span class="sync-status" id="sync-status">尚未同步</span>
+      <button class="btn sync-btn" onclick="syncData()" id="sync-btn">⟳ 同步資料</button>
+      <button class="btn logout-btn" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+
+  <main>
+    <!-- 設定 Apps Script 網址 -->
+    <div class="setup-banner" id="setup-banner">
+      <h3>⚙️ 設定 Google Sheet 連接</h3>
+      <div>請將 Apps Script 部署後的網址貼到下方，之後按「同步資料」即可自動讀取您的交易記錄。</div>
+      <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/xxxxxx/exec">
+      <br>
+      <button class="btn save-url" onclick="saveApiUrl()">儲存網址</button>
+    </div>
+
+    <!-- 導覽列 -->
+    <div class="nav">
+      <button class="active" onclick="showTab('holdings',this)">持倉總覽</button>
+      <button onclick="showTab('returns',this)">報酬率分析</button>
+      <button onclick="showTab('charts',this)">圖表</button>
+      <button onclick="showTab('prices',this)">更新股價</button>
+    </div>
+
+    <!-- ── 持倉總覽 ── -->
+    <div id="tab-holdings" class="panel active">
+      <div class="metrics" id="h-metrics"></div>
+      <div class="toolbar">
+        <input id="srch" placeholder="搜尋股號/股名" style="width:150px" oninput="renderH()">
+        <select id="catF" onchange="renderH()" style="width:100px">
+          <option value="">全部類型</option>
+          <option value="ETF">ETF</option>
+          <option value="股票">個股</option>
+        </select>
+        <select id="sortF" onchange="renderH()" style="width:110px">
+          <option value="no">編號排序</option>
+          <option value="pnl">損益排序</option>
+          <option value="mkt">市值排序</option>
+          <option value="div">股息排序</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:30px">#</th>
+            <th style="width:85px">股號</th>
+            <th style="width:120px">股名</th>
+            <th style="width:55px">股數</th>
+            <th style="width:65px">均價(含息)</th>
+            <th style="width:65px">均價(不含)</th>
+            <th style="width:65px">今日股價</th>
+            <th style="width:85px">成本</th>
+            <th style="width:85px">市值</th>
+            <th style="width:85px">未實現損益</th>
+            <th style="width:58px">損益%</th>
+            <th style="width:70px">已領股息</th>
+            <th style="width:85px">含息+已實現</th>
+            <th style="width:58px">含息%</th>
+          </tr></thead>
+          <tbody id="h-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span id="h-pi"></span>
+        <button onclick="chgP(-1)">←</button>
+        <button onclick="chgP(1)">→</button>
+      </div>
+    </div>
+
+    <!-- ── 報酬率分析 ── -->
+    <div id="tab-returns" class="panel">
+      <div class="card">
+        <h3>📅 指定時間範圍計算報酬率</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:5px">
+            <label style="font-size:12px;color:var(--text2);white-space:nowrap">從</label>
+            <input type="date" id="d-from" style="width:145px;height:32px;font-size:12px">
+          </div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <label style="font-size:12px;color:var(--text2);white-space:nowrap">到</label>
+            <input type="date" id="d-to" style="width:145px;height:32px;font-size:12px">
+          </div>
+          <select id="r-stock" style="width:180px;height:32px;font-size:12px">
+            <option value="">全部持股</option>
+          </select>
+          <button class="btn btn-primary" onclick="calcReturns()">計算</button>
+        </div>
+        <div class="ret-grid" id="ret-results">
+          <div style="color:var(--text2);font-size:12px;grid-column:1/-1;padding:.5rem 0">
+            設定時間範圍後按「計算」
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📖 報酬率計算方式說明</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;font-size:12px;color:var(--text2)">
+          <div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:4px">簡單報酬率</div>
+            （期末市值＋股息－投入成本）÷ 投入成本<br>最直觀，適合查看整體獲利
+          </div>
+          <div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:4px">TWR 時間加權年化</div>
+            排除資金流入流出的影響<br>適合與大盤指數或基金績效比較
+          </div>
+          <div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:4px">XIRR 金錢加權年化</div>
+            考慮每筆買賣的實際時間點<br>最能反映您的真實投資報酬
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 圖表 ── -->
+    <div id="tab-charts" class="panel">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem">
+        <div class="card">
+          <h3>🥧 持倉類型佔比（市值）</h3>
+          <div style="position:relative;height:220px">
+            <canvas id="pieChart"></canvas>
+          </div>
+          <div id="pie-legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:.75rem;font-size:12px;color:var(--text2)"></div>
+        </div>
+        <div class="card">
+          <h3>💰 已領股息（依股票）</h3>
+          <div style="position:relative;height:220px">
+            <canvas id="divChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📊 各股未實現損益</h3>
+        <div style="position:relative" id="bar-wrap">
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 更新股價 ── -->
+    <div id="tab-prices" class="panel">
+      <div class="card">
+        <h3>🔄 自動抓取台股收盤價（TWSE）</h3>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:.85rem">
+          串接台灣證券交易所官方資料，支援上市股票與 ETF。抓取速度約每檔 0.3 秒。
+        </div>
+        <button class="btn btn-primary" onclick="fetchPrices()" id="fetch-btn">⬇ 更新所有股價</button>
+        <div id="price-log" style="margin-top:1rem;max-height:400px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal：新增持股 -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3>新增持股</h3>
+    <label>股票代號</label><input id="m-stock" placeholder="例：0056">
+    <label>股票名稱</label><input id="m-name" placeholder="例：元大高股息">
+    <label>類型</label>
+    <select id="m-cat"><option value="ETF">ETF</option><option value="股票">個股</option></select>
+    <label>持有股數</label><input id="m-share" type="number" placeholder="0">
+    <label>平均成本（不含息）</label><input id="m-cost" type="number" placeholder="0">
+    <label>今日股價</label><input id="m-price" type="number" placeholder="0">
+    <label>已領股息</label><input id="m-div" type="number" placeholder="0">
+    <div class="modal-btns">
+      <button onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="addStock()">新增</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+//  設定區（可修改）
+// ════════════════════════════════════════
+const PASSWORD_HASH = '90a1fb63e15ccfb9ec0fece0d1fb8deb78be2df610d4e3ae4d59ca1c2d30e510'; // 密碼：0903
+const SESSION_KEY   = 'stock_auth';
+const API_URL_KEY   = 'stock_api_url';
+
+// ════════════════════════════════════════
+//  密碼驗證（SHA-256）
+// ════════════════════════════════════════
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function doLogin() {
+  const pw = document.getElementById('pw-input').value;
+  const err = document.getElementById('pw-err');
+  if (!pw) { err.textContent = '請輸入密碼'; return; }
+  const hash = await sha256(pw);
+  if (hash !== PASSWORD_HASH) { err.textContent = '密碼錯誤，請重試'; return; }
+  const remember = document.getElementById('remember').checked;
+  const exp = remember ? Date.now() + 30*24*60*60*1000 : 0;
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ hash, exp }));
+  showApp();
+}
+
+function checkSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (!s) return false;
+    if (s.exp && s.exp < Date.now()) { localStorage.removeItem(SESSION_KEY); return false; }
+    return s.hash === PASSWORD_HASH;
+  } catch { return false; }
+}
+
+function doLogout() {
+  localStorage.removeItem(SESSION_KEY);
+  location.reload();
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  initApp();
+}
+
+// ════════════════════════════════════════
+//  資料狀態
+// ════════════════════════════════════════
+let stocks = [];
+let txns   = [];
+let page   = 1;
+const PER  = 15;
+let pieChart = null, barChart = null, divChart = null;
+
+// ════════════════════════════════════════
+//  初始化
+// ════════════════════════════════════════
+function initApp() {
+  // 設定日期預設值
+  const now = new Date();
+  document.getElementById('d-to').value   = now.toISOString().slice(0,10);
+  document.getElementById('d-from').value = `${now.getFullYear()-1}-01-01`;
+
+  // 檢查 API URL
+  const url = localStorage.getItem(API_URL_KEY);
+  if (url) {
+    document.getElementById('api-url-input').value = url;
+    document.getElementById('setup-banner').style.display = 'none';
+  }
+
+  // 載入暫存資料
+  const cached = localStorage.getItem('stock_data');
+  if (cached) {
+    try {
+      const d = JSON.parse(cached);
+      txns = d.txns || [];
+      calcHoldings();
+      renderH();
+      document.getElementById('sync-status').textContent = `上次同步：${d.syncAt || '未知'}`;
+    } catch {}
+  } else {
+    renderH();
+  }
+}
+
+// ════════════════════════════════════════
+//  Apps Script 同步
+// ════════════════════════════════════════
+function saveApiUrl() {
+  const url = document.getElementById('api-url-input').value.trim();
+  if (!url) return;
+  localStorage.setItem(API_URL_KEY, url);
+  document.getElementById('setup-banner').style.display = 'none';
+  syncData();
+}
+
+async function syncData() {
+  const url = localStorage.getItem(API_URL_KEY);
+  if (!url) {
+    document.getElementById('setup-banner').style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('sync-btn');
+  const st  = document.getElementById('sync-status');
+  btn.disabled = true; btn.textContent = '⟳ 同步中...';
+  st.textContent = '同步中...';
+  try {
+    const res  = await fetch(`${url}?action=getData`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    txns = data.txns || [];
+    const now = new Date().toLocaleString('zh-TW');
+    localStorage.setItem('stock_data', JSON.stringify({ txns, syncAt: now }));
+    st.textContent = `上次同步：${now}`;
+    calcHoldings();
+    renderH();
+  } catch (e) {
+    st.textContent = `同步失敗：${e.message}`;
+  }
+  btn.disabled = false; btn.textContent = '⟳ 同步資料';
+}
+
+// ════════════════════════════════════════
+//  從交易記錄計算持倉
+// ════════════════════════════════════════
+function calcHoldings() {
+  const map = {};
+  txns.forEach(t => {
+    if (!t.stock || !t.bsr) return;
+    if (!map[t.stock]) map[t.stock] = {
+      stock: t.stock, name: t.name,
+      cat: t.stock.startsWith('00') ? 'ETF' : '股票',
+      share: 0, totalSpend: 0, div: 0, realPnl: 0,
+      price: 0, no: Object.keys(map).length + 1
+    };
+    const s = map[t.stock];
+    if (s.name === '' && t.name) s.name = t.name;
+    if (['B-S','B-M'].includes(t.bsr)) { s.share += t.share; s.totalSpend += t.spend; }
+    else if (t.bsr === 'S')            { s.share -= t.share; s.totalSpend -= t.spend; }
+    else if (t.bsr === 'R')            { s.div += t.spend; }
+    if (t.pnlDollar) s.realPnl += t.pnlDollar;
+  });
+  stocks = Object.values(map)
+    .filter(s => s.share > 0.001)
+    .map(s => ({ ...s, avgCost: s.share > 0 ? s.totalSpend / s.share : 0 }));
+}
+
+// ════════════════════════════════════════
+//  工具函數
+// ════════════════════════════════════════
+const fmt = n => {
+  const a = Math.abs(n);
+  const s = n < 0 ? '-' : '';
+  return s + (a >= 10000 ? (a/10000).toFixed(1)+'萬' : Math.round(a).toLocaleString('zh-TW'));
+};
+const pct = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+
+// ════════════════════════════════════════
+//  Tab 切換
+// ════════════════════════════════════════
+function showTab(t, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (t === 'charts') setTimeout(drawCharts, 100);
+  if (t === 'returns') populateStockSelect();
+}
+
+// ════════════════════════════════════════
+//  持倉渲染
+// ════════════════════════════════════════
+function getFiltered() {
+  const q   = document.getElementById('srch').value.toLowerCase();
+  const cat = document.getElementById('catF').value;
+  const srt = document.getElementById('sortF').value;
+  let d = stocks.filter(s =>
+    (!q || s.stock.toLowerCase().includes(q) || s.name.includes(q)) &&
+    (!cat || s.cat === cat)
+  );
+  if (srt === 'pnl') d.sort((a,b) => (b.price*b.share - b.totalSpend) - (a.price*a.share - a.totalSpend));
+  else if (srt === 'mkt') d.sort((a,b) => b.price*b.share - a.price*a.share);
+  else if (srt === 'div') d.sort((a,b) => b.div - a.div);
+  return d;
+}
+
+function renderH() { page = 1; renderPage(); }
+
+function renderPage() {
+  const data   = getFiltered();
+  const tCost  = stocks.reduce((a,s) => a + s.totalSpend, 0);
+  const tMkt   = stocks.reduce((a,s) => a + s.price * s.share, 0);
+  const tPnl   = tMkt - tCost;
+  const tDiv   = stocks.reduce((a,s) => a + s.div, 0);
+  const tReal  = stocks.reduce((a,s) => a + s.realPnl, 0);
+  const tAll   = tPnl + tDiv + tReal;
+
+  document.getElementById('h-metrics').innerHTML = `
+    <div class="mc"><div class="lb">總投入成本</div><div class="vl">${fmt(tCost)}</div></div>
+    <div class="mc"><div class="lb">總市值</div><div class="vl">${fmt(tMkt)}</div></div>
+    <div class="mc"><div class="lb">未實現損益</div><div class="vl ${tPnl>=0?'pos':'neg'}">${fmt(tPnl)}</div></div>
+    <div class="mc"><div class="lb">累積股息</div><div class="vl pos">${fmt(tDiv)}</div></div>
+    <div class="mc"><div class="lb">已實現損益</div><div class="vl ${tReal>=0?'pos':'neg'}">${fmt(tReal)}</div></div>
+    <div class="mc"><div class="lb">總報酬（含息+已實現）</div><div class="vl ${tAll>=0?'pos':'neg'}">${fmt(tAll)}</div></div>
+    <div class="mc"><div class="lb">持股數</div><div class="vl">${stocks.length} 檔</div></div>
+  `;
+
+  const start = (page - 1) * PER;
+  const slice = data.slice(start, start + PER);
+
+  document.getElementById('h-tbody').innerHTML = slice.map((s, i) => {
+    const cost    = s.totalSpend;
+    const mkt     = s.price * s.share;
+    const pnl     = mkt - cost;
+    const pnlPct  = cost > 0 ? pnl / cost * 100 : 0;
+    const avgWD   = s.share > 0 ? (cost - s.div) / s.share : 0;
+    const total   = pnl + s.div + s.realPnl;
+    const totPct  = cost > 0 ? total / cost * 100 : 0;
+    return `<tr>
+      <td>${start+i+1}</td>
+      <td>${s.stock}<span class="tag ${s.cat==='ETF'?'tag-e':'tag-s'}">${s.cat}</span></td>
+      <td>${s.name}</td>
+      <td>${s.share.toLocaleString()}</td>
+      <td>${avgWD.toFixed(2)}</td>
+      <td>${s.avgCost.toFixed(2)}</td>
+      <td>${s.price > 0 ? s.price.toFixed(2) : '<span style="color:var(--text3)">-</span>'}</td>
+      <td>${fmt(cost)}</td>
+      <td>${s.price > 0 ? fmt(mkt) : '<span style="color:var(--text3)">-</span>'}</td>
+      <td class="${pnl>=0?'pos':'neg'}">${s.price > 0 ? fmt(pnl) : '-'}</td>
+      <td class="${pnlPct>=0?'pos':'neg'}">${s.price > 0 ? pct(pnlPct) : '-'}</td>
+      <td class="pos">${fmt(s.div)}</td>
+      <td class="${total>=0?'pos':'neg'}">${s.price > 0 ? fmt(total) : '-'}</td>
+      <td class="${totPct>=0?'pos':'neg'}">${s.price > 0 ? pct(totPct) : '-'}</td>
+    </tr>`;
+  }).join('');
+
+  const maxPg = Math.ceil(data.length / PER) || 1;
+  document.getElementById('h-pi').textContent = `第 ${page}/${maxPg} 頁（共 ${data.length} 檔）`;
+}
+
+function chgP(d) {
+  const max = Math.ceil(getFiltered().length / PER) || 1;
+  page = Math.max(1, Math.min(max, page + d));
+  renderPage();
+}
+
+// ════════════════════════════════════════
+//  報酬率計算
+// ════════════════════════════════════════
+function populateStockSelect() {
+  const sel = document.getElementById('r-stock');
+  sel.innerHTML = '<option value="">全部持股</option>' +
+    stocks.map(s => `<option value="${s.stock}">${s.stock} ${s.name}</option>`).join('');
+}
+
+function calcReturns() {
+  const from = new Date(document.getElementById('d-from').value);
+  const to   = new Date(document.getElementById('d-to').value);
+  const sf   = document.getElementById('r-stock').value;
+  const days = (to - from) / (1000*60*60*24);
+  const years = days / 365;
+
+  const src = sf ? txns.filter(t => t.stock === sf) : txns;
+  const inRange = src.filter(t => {
+    const d = new Date(t.date.replace(/\//g,'-'));
+    return d >= from && d <= to;
+  });
+
+  let totalIn = 0, totalDiv = 0;
+  const cashFlows = [];
+
+  inRange.forEach(t => {
+    if (['B-S','B-M'].includes(t.bsr)) {
+      totalIn += t.spend;
+      cashFlows.push({ date: new Date(t.date.replace(/\//g,'-')), amount: -t.spend });
+    } else if (t.bsr === 'S') {
+      cashFlows.push({ date: new Date(t.date.replace(/\//g,'-')), amount: t.spend });
+    } else if (t.bsr === 'R') {
+      totalDiv += t.spend;
+      cashFlows.push({ date: new Date(t.date.replace(/\//g,'-')), amount: t.spend });
+    }
+  });
+
+  // 若無交易紀錄，用持倉資料估算
+  if (totalIn === 0) {
+    const src2 = sf ? stocks.filter(s => s.stock === sf) : stocks;
+    totalIn = src2.reduce((a,s) => a + s.totalSpend, 0);
+    totalDiv = src2.reduce((a,s) => a + s.div, 0);
+    cashFlows.push({ date: from, amount: -totalIn });
+  }
+
+  const endMkt = (sf ? stocks.filter(s=>s.stock===sf) : stocks)
+    .reduce((a,s) => a + s.price*s.share, 0);
+
+  cashFlows.push({ date: to, amount: endMkt });
+
+  const simpleRet = totalIn > 0 ? ((endMkt + totalDiv - totalIn) / totalIn) * 100 : 0;
+  const xirr      = calcXIRR(cashFlows) * 100;
+  const twr        = years > 0 ? (Math.pow(1 + simpleRet/100, 1/years) - 1) * 100 : 0;
+
+  document.getElementById('ret-results').innerHTML = `
+    <div class="ret-card">
+      <div class="rt">期間</div>
+      <div class="rv" style="font-size:13px;line-height:1.6">
+        ${document.getElementById('d-from').value}<br>→ ${document.getElementById('d-to').value}
+      </div>
+      <div class="rd">${Math.round(days)} 天</div>
+    </div>
+    <div class="ret-card">
+      <div class="rt">簡單報酬率（總計）</div>
+      <div class="rv ${simpleRet>=0?'pos':'neg'}">${simpleRet.toFixed(2)}%</div>
+      <div class="rd">總投入 ${fmt(totalIn)}</div>
+    </div>
+    <div class="ret-card">
+      <div class="rt">XIRR 年化報酬</div>
+      <div class="rv ${xirr>=0?'pos':'neg'}">${xirr.toFixed(2)}%</div>
+      <div class="rd">考慮資金時間點</div>
+    </div>
+    <div class="ret-card">
+      <div class="rt">TWR 年化報酬</div>
+      <div class="rv ${twr>=0?'pos':'neg'}">${twr.toFixed(2)}%</div>
+      <div class="rd">排除資金流入影響</div>
+    </div>
+    <div class="ret-card">
+      <div class="rt">期間股息收入</div>
+      <div class="rv pos">${fmt(totalDiv)}</div>
+      <div class="rd">僅計算 R 類型</div>
+    </div>
+    <div class="ret-card">
+      <div class="rt">期末市值</div>
+      <div class="rv">${fmt(endMkt)}</div>
+      <div class="rd">損益 ${fmt(endMkt+totalDiv-totalIn)}</div>
+    </div>
+  `;
+}
+
+function calcXIRR(flows) {
+  if (flows.length < 2) return 0;
+  flows.sort((a,b) => a.date - b.date);
+  const t0 = flows[0].date;
+  let r = 0.1;
+  for (let i = 0; i < 200; i++) {
+    let npv = 0, dnpv = 0;
+    flows.forEach(f => {
+      const t = (f.date - t0) / (1000*60*60*24*365);
+      const pv = Math.pow(1+r, t);
+      npv  += f.amount / pv;
+      dnpv -= t * f.amount / (pv * (1+r));
+    });
+    if (Math.abs(npv) < 0.01) break;
+    if (dnpv === 0) break;
+    r -= npv / dnpv;
+  }
+  return isFinite(r) ? r : 0;
+}
+
+// ════════════════════════════════════════
+//  圖表
+// ════════════════════════════════════════
+function drawCharts() {
+  const etfMkt  = stocks.filter(s=>s.cat==='ETF').reduce((a,s)=>a+s.price*s.share,0);
+  const stkMkt  = stocks.filter(s=>s.cat==='股票').reduce((a,s)=>a+s.price*s.share,0);
+  const total   = etfMkt + stkMkt || 1;
+
+  document.getElementById('pie-legend').innerHTML = `
+    <span style="display:flex;align-items:center;gap:4px"><i style="width:10px;height:10px;border-radius:2px;background:#1A5FA8;display:inline-block"></i>ETF ${((etfMkt/total)*100).toFixed(1)}%（${fmt(etfMkt)}）</span>
+    <span style="display:flex;align-items:center;gap:4px"><i style="width:10px;height:10px;border-radius:2px;background:#1A7A4A;display:inline-block"></i>個股 ${((stkMkt/total)*100).toFixed(1)}%（${fmt(stkMkt)}）</span>`;
+
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: { labels:['ETF','個股'], datasets:[{ data:[Math.round(etfMkt),Math.round(stkMkt)], backgroundColor:['#1A5FA8','#1A7A4A'], borderWidth:0, hoverOffset:6 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:d=>`${d.label}: ${fmt(d.raw)}`}} } }
+  });
+
+  // 損益長條圖
+  const sorted = [...stocks].sort((a,b)=>(b.price*b.share-b.totalSpend)-(a.price*a.share-a.totalSpend));
+  const pnls   = sorted.map(s => Math.round(s.price*s.share - s.totalSpend));
+  const bh     = Math.max(sorted.length*34+60, 200);
+  document.getElementById('bar-wrap').style.height = bh+'px';
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: { labels: sorted.map(s=>s.stock), datasets:[{ data:pnls, backgroundColor:pnls.map(v=>v>=0?'#1A7A4A':'#C0392B'), borderWidth:0, label:'未實現損益' }] },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:d=>`${fmt(d.raw)}`}} }, scales:{ x:{ticks:{callback:v=>fmt(v)},grid:{color:'rgba(0,0,0,.05)'}}, y:{ticks:{font:{size:11}}} } }
+  });
+
+  // 股息圖
+  const divS = [...stocks].filter(s=>s.div>0).sort((a,b)=>b.div-a.div);
+  if (divChart) divChart.destroy();
+  divChart = new Chart(document.getElementById('divChart'), {
+    type: 'bar',
+    data: { labels:divS.map(s=>s.stock), datasets:[{ data:divS.map(s=>Math.round(s.div)), backgroundColor:'#1A5FA8', borderWidth:0, label:'股息' }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:d=>`${fmt(d.raw)}`}} }, scales:{ x:{ticks:{font:{size:11},maxRotation:45}}, y:{ticks:{callback:v=>fmt(v)},grid:{color:'rgba(0,0,0,.05)'}} } }
+  });
+}
+
+// ════════════════════════════════════════
+//  更新股價（TWSE）
+// ════════════════════════════════════════
+async function fetchPrices() {
+  const btn = document.getElementById('fetch-btn');
+  btn.disabled = true; btn.textContent = '⬇ 抓取中...';
+  const log = document.getElementById('price-log');
+  log.innerHTML = '';
+  const now  = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+
+  for (const s of stocks) {
+    const row = document.createElement('div');
+    row.className = 'price-row';
+    row.innerHTML = `<span class="sym">${s.stock}</span><span class="nm">${s.name}</span><span class="pr">-</span><span class="badge badge-ld">抓取中...</span>`;
+    log.appendChild(row);
+    const badge = row.querySelector('.badge');
+    const prEl  = row.querySelector('.pr');
+    try {
+      const res  = await fetch(`https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateStr}&stockNo=${s.stock}`);
+      const data = await res.json();
+      if (data.data && data.data.length > 0) {
+        const last = data.data[data.data.length-1];
+        const pr   = parseFloat(last[6].replace(/,/g,''));
+        if (!isNaN(pr)) {
+          s.price = pr;
+          prEl.textContent  = pr.toFixed(2);
+          badge.className   = 'badge badge-ok';
+          badge.textContent = '✓ 成功';
+        } else {
+          badge.className = 'badge badge-err'; badge.textContent = '解析失敗';
+        }
+      } else {
+        badge.className = 'badge badge-err'; badge.textContent = '無資料';
+      }
+    } catch {
+      badge.className = 'badge badge-err'; badge.textContent = '連線失敗';
+    }
+    await new Promise(r => setTimeout(r, 350));
+  }
+  btn.disabled = false; btn.textContent = '⬇ 更新所有股價';
+  renderPage();
+}
+
+// ════════════════════════════════════════
+//  Modal
+// ════════════════════════════════════════
+function openModal()  { document.getElementById('modal').classList.add('open'); }
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  ['m-stock','m-name','m-share','m-cost','m-price','m-div'].forEach(id => document.getElementById(id).value = '');
+}
+function addStock() {
+  const st = document.getElementById('m-stock').value.trim();
+  const nm = document.getElementById('m-name').value.trim();
+  if (!st || !nm) return;
+  stocks.push({
+    no: stocks.length+1, stock: st, name: nm,
+    cat: document.getElementById('m-cat').value,
+    share:     +document.getElementById('m-share').value || 0,
+    avgCost:   +document.getElementById('m-cost').value  || 0,
+    totalSpend:(+document.getElementById('m-cost').value  || 0) * (+document.getElementById('m-share').value || 0),
+    price:     +document.getElementById('m-price').value  || 0,
+    div:       +document.getElementById('m-div').value    || 0,
+    realPnl: 0
+  });
+  closeModal(); renderH();
+}
+
+// ════════════════════════════════════════
+//  啟動
+// ════════════════════════════════════════
+if (checkSession()) { showApp(); }
+</script>
+</body>
+</html>
